@@ -136,7 +136,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndices: path_index,
+        pathIndex: path_index,
       })
 
 
@@ -204,7 +204,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndices: path_index,
+        pathIndex: path_index,
       })
 
 
@@ -263,7 +263,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndices: path_index,
+        pathIndex: path_index,
       })
 
 
@@ -344,7 +344,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndices: path_index,
+        pathIndex: path_index,
       })
 
 
