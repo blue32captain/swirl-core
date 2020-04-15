@@ -11,7 +11,7 @@ const { takeSnapshot, revertSnapshot } = require('../lib/ganacheHelper')
 const Mixer = artifacts.require('./ERC20Mixer.sol')
 const Token = artifacts.require('./ERC20Mock.sol')
 const USDTToken = artifacts.require('./IUSDT.sol')
-const { ETH_AMOUNT, TOKEN_AMOUNT, MERKLE_TREE_HEIGHT, ERC20_TOKEN } = process.env
+const { ETH_AMOUNT, TOKEN_AMOUNT, MERKLE_TREE_HEIGHT, EMPTY_ELEMENT, ERC20_TOKEN } = process.env
 
 const websnarkUtils = require('websnark/src/utils')
 const buildGroth16 = require('websnark/src/groth16')
@@ -50,6 +50,7 @@ contract('ERC20Mixer', accounts => {
   const sender = accounts[0]
   const operator = accounts[0]
   const levels = MERKLE_TREE_HEIGHT || 16
+  const zeroValue = EMPTY_ELEMENT || 1337
   let tokenDenomination = TOKEN_AMOUNT || '1000000000000000000' // 1 ether
   let snapshotId
   let prefix = 'test'
@@ -65,6 +66,7 @@ contract('ERC20Mixer', accounts => {
   before(async () => {
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
     )
@@ -100,14 +102,6 @@ contract('ERC20Mixer', accounts => {
       logs[0].args.commitment.should.be.eq.BN(toBN(commitment))
       logs[0].args.leafIndex.should.be.eq.BN(toBN(0))
     })
-
-    it('should not allow to send ether on deposit', async () => {
-      const commitment = 43
-      await token.approve(mixer.address, tokenDenomination)
-
-      let error = await mixer.deposit(commitment, { from: sender, value: 1e6 }).should.be.rejected
-      error.reason.should.be.equal('ETH value is supposed to be 0 for ETH mixer')
-    })
   })
 
   describe('#withdraw', () => {
@@ -142,7 +136,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
 
@@ -178,7 +172,7 @@ contract('ERC20Mixer', accounts => {
       ethBalanceRecieverAfter.should.be.eq.BN(toBN(ethBalanceRecieverBefore).add(toBN(refund)))
       ethBalanceRelayerAfter.should.be.eq.BN(toBN(ethBalanceRelayerBefore).sub(toBN(refund)))
 
-      logs[0].event.should.be.equal('Withdrawal')
+      logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
       logs[0].args.relayer.should.be.eq.BN(relayer)
       logs[0].args.fee.should.be.eq.BN(feeBN)
@@ -210,7 +204,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
 
@@ -269,7 +263,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
 
@@ -302,7 +296,7 @@ contract('ERC20Mixer', accounts => {
       ethBalanceRecieverAfter.should.be.eq.BN(toBN(ethBalanceRecieverBefore).add(toBN(refund)).sub(feeBN))
 
 
-      logs[0].event.should.be.equal('Withdrawal')
+      logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
       logs[0].args.relayer.should.be.eq.BN(operator)
       logs[0].args.fee.should.be.eq.BN(feeBN)
@@ -350,7 +344,7 @@ contract('ERC20Mixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
 
@@ -384,7 +378,7 @@ contract('ERC20Mixer', accounts => {
       ethBalanceRecieverAfter.should.be.eq.BN(toBN(ethBalanceRecieverBefore).add(toBN(refund)).sub(feeBN))
 
 
-      logs[0].event.should.be.equal('Withdrawal')
+      logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
       logs[0].args.relayer.should.be.eq.BN(operator)
       logs[0].args.fee.should.be.eq.BN(feeBN)
@@ -399,6 +393,7 @@ contract('ERC20Mixer', accounts => {
     snapshotId = await takeSnapshot()
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
     )

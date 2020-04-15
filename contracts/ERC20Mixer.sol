@@ -17,47 +17,46 @@ contract ERC20Mixer is Mixer {
   address public token;
 
   constructor(
-    IVerifier _verifier,
+    address _verifier,
     uint256 _denomination,
     uint8 _merkleTreeHeight,
-    address _operator,
+    uint256 _emptyElement,
+    address payable _operator,
     address _token
-  ) Mixer(_verifier, _denomination, _merkleTreeHeight, _operator) public {
+  ) Mixer(_verifier, _denomination, _merkleTreeHeight, _emptyElement, _operator) public {
     token = _token;
   }
 
   function _processDeposit() internal {
-    require(msg.value == 0, "ETH value is supposed to be 0 for ETH mixer");
-    _safeErc20TransferFrom(msg.sender, address(this), denomination);
+    safeErc20TransferFrom(msg.sender, address(this), denomination);
   }
 
   function _processWithdraw(address payable _receiver, address payable _relayer, uint256 _fee, uint256 _refund) internal {
     require(msg.value == _refund, "Incorrect refund amount received by the contract");
 
-    _safeErc20Transfer(_receiver, denomination - _fee);
+    safeErc20Transfer(_receiver, denomination - _fee);
     if (_fee > 0) {
-      _safeErc20Transfer(_relayer, _fee);
+      safeErc20Transfer(_relayer, _fee);
     }
     if (_refund > 0) {
       _receiver.transfer(_refund);
     }
   }
 
-  function _safeErc20TransferFrom(address _from, address _to, uint256 _amount) internal {
+  function safeErc20TransferFrom(address from, address to, uint256 amount) internal {
     bool success;
     bytes memory data;
     bytes4 transferFromSelector = 0x23b872dd;
     (success, data) = token.call(
-      abi.encodeWithSelector(
-        transferFromSelector,
-        _from, _to, _amount
-      )
+        abi.encodeWithSelector(
+            transferFromSelector,
+            from, to, amount
+        )
     );
     require(success, "not enough allowed tokens");
 
     // if contract returns some data let's make sure that is `true` according to standard
     if (data.length > 0) {
-      require(data.length == 32, "data length should be either 0 or 32 bytes");
       assembly {
         success := mload(add(data, 0x20))
       }
@@ -65,21 +64,20 @@ contract ERC20Mixer is Mixer {
     }
   }
 
-  function _safeErc20Transfer(address _to, uint256 _amount) internal {
+  function safeErc20Transfer(address to, uint256 amount) internal {
     bool success;
     bytes memory data;
     bytes4 transferSelector = 0xa9059cbb;
     (success, data) = token.call(
         abi.encodeWithSelector(
             transferSelector,
-        _to, _amount
+            to, amount
         )
     );
     require(success, "not enough tokens");
 
     // if contract returns some data let's make sure that is `true` according to standard
     if (data.length > 0) {
-      require(data.length == 32, "data length should be either 0 or 32 bytes");
       assembly {
         success := mload(add(data, 0x20))
       }

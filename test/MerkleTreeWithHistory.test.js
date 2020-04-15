@@ -12,7 +12,7 @@ const hasherContract = artifacts.require('./Hasher.sol')
 const MerkleTree = require('../lib/MerkleTree')
 const hasherImpl = require('../lib/MiMC')
 
-const { ETH_AMOUNT, MERKLE_TREE_HEIGHT } = process.env
+const { ETH_AMOUNT, MERKLE_TREE_HEIGHT, EMPTY_ELEMENT } = process.env
 
 // eslint-disable-next-line no-unused-vars
 function BNArrayToStringArray(array) {
@@ -27,6 +27,7 @@ contract('MerkleTreeWithHistory', accounts => {
   let merkleTreeWithHistory
   let hasherInstance
   let levels = MERKLE_TREE_HEIGHT || 16
+  let zeroValue = EMPTY_ELEMENT || 1337
   const sender = accounts[0]
   // eslint-disable-next-line no-unused-vars
   const value = ETH_AMOUNT || '1000000000000000000'
@@ -38,22 +39,22 @@ contract('MerkleTreeWithHistory', accounts => {
   before(async () => {
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
     )
     hasherInstance = await hasherContract.deployed()
     await MerkleTreeWithHistory.link(hasherContract, hasherInstance.address)
-    merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels)
+    merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels, zeroValue)
     snapshotId = await takeSnapshot()
   })
 
   describe('#constructor', () => {
     it('should initialize', async () => {
-      const zeroValue = await merkleTreeWithHistory.ZERO_VALUE()
-      const firstSubtree = await merkleTreeWithHistory.filledSubtrees(0)
-      firstSubtree.should.be.eq.BN(zeroValue)
-      const firstZero = await merkleTreeWithHistory.zeros(0)
-      firstZero.should.be.eq.BN(zeroValue)
+      const filled_subtrees = await merkleTreeWithHistory.filled_subtrees()
+      filled_subtrees[0].should.be.eq.BN(zeroValue)
+      const zeros = await merkleTreeWithHistory.zeros()
+      zeros[0].should.be.eq.BN(zeroValue)
     })
   })
 
@@ -69,6 +70,7 @@ contract('MerkleTreeWithHistory', accounts => {
       hasher = new hasherImpl()
       tree = new MerkleTree(
         2,
+        zeroValue,
         null,
         prefix,
       )
@@ -89,6 +91,7 @@ contract('MerkleTreeWithHistory', accounts => {
 
       const batchTree = new MerkleTree(
         levels,
+        zeroValue,
         elements,
         prefix,
       )
@@ -128,6 +131,7 @@ contract('MerkleTreeWithHistory', accounts => {
 
       const batchTree = new MerkleTree(
         levels,
+        zeroValue,
         elements,
         prefix,
       )
@@ -146,6 +150,7 @@ contract('MerkleTreeWithHistory', accounts => {
       console.time('MerkleTree')
       tree = new MerkleTree(
         levels,
+        zeroValue,
         elements,
         prefix,
       )
@@ -172,7 +177,8 @@ contract('MerkleTreeWithHistory', accounts => {
 
     it('should reject if tree is full', async () => {
       levels = 6
-      merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels)
+      zeroValue = 1337
+      merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels, zeroValue)
 
       for (let i = 0; i < 2**levels; i++) {
         await merkleTreeWithHistory.insert(i+42).should.be.fulfilled
@@ -187,8 +193,8 @@ contract('MerkleTreeWithHistory', accounts => {
 
     it.skip('hasher gas', async () => {
       levels = 6
-      merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels)
-      const zeroValue = await merkleTreeWithHistory.zeroValue()
+      zeroValue = 1337
+      merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels, zeroValue)
 
       const gas = await merkleTreeWithHistory.hashLeftRight.estimateGas(zeroValue, zeroValue)
       console.log('gas', gas - 21000)
@@ -202,6 +208,7 @@ contract('MerkleTreeWithHistory', accounts => {
     hasher = new hasherImpl()
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
       null,

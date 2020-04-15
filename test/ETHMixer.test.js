@@ -9,7 +9,7 @@ const { toBN, toHex, randomHex } = require('web3-utils')
 const { takeSnapshot, revertSnapshot } = require('../lib/ganacheHelper')
 
 const Mixer = artifacts.require('./ETHMixer.sol')
-const { ETH_AMOUNT, MERKLE_TREE_HEIGHT } = process.env
+const { ETH_AMOUNT, MERKLE_TREE_HEIGHT, EMPTY_ELEMENT } = process.env
 
 const websnarkUtils = require('websnark/src/utils')
 const buildGroth16 = require('websnark/src/groth16')
@@ -62,6 +62,7 @@ contract('ETHMixer', accounts => {
   const sender = accounts[0]
   const operator = accounts[0]
   const levels = MERKLE_TREE_HEIGHT || 16
+  const zeroValue = EMPTY_ELEMENT || 1337
   const value = ETH_AMOUNT || '1000000000000000000' // 1 ether
   let snapshotId
   let prefix = 'test'
@@ -77,6 +78,7 @@ contract('ETHMixer', accounts => {
   before(async () => {
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
     )
@@ -113,15 +115,11 @@ contract('ETHMixer', accounts => {
 
     it('should not deposit if disabled', async () => {
       let commitment = 42;
-      (await mixer.isDepositsDisabled()).should.be.equal(false)
-      const err = await mixer.toggleDeposits(true, { from: accounts[1] }).should.be.rejected
+      (await mixer.isDepositsEnabled()).should.be.equal(true)
+      const err = await mixer.toggleDeposits({ from: accounts[1] }).should.be.rejected
       err.reason.should.be.equal('Only operator can call this function.')
-      await mixer.toggleDeposits(false, { from: sender });
-      (await mixer.isDepositsDisabled()).should.be.equal(false)
-      await mixer.toggleDeposits(true, { from: sender });
-      (await mixer.isDepositsDisabled()).should.be.equal(true)
-      await mixer.toggleDeposits(true, { from: sender });
-      (await mixer.isDepositsDisabled()).should.be.equal(true)
+      await mixer.toggleDeposits({ from: sender });
+      (await mixer.isDepositsEnabled()).should.be.equal(false)
       let error = await mixer.deposit(commitment, { value, from: sender }).should.be.rejected
       error.reason.should.be.equal('deposits are disabled')
     })
@@ -150,7 +148,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
       let proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
@@ -210,7 +208,7 @@ contract('ETHMixer', accounts => {
         nullifier: deposit.nullifier,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
 
@@ -240,7 +238,7 @@ contract('ETHMixer', accounts => {
       balanceRecieverAfter.should.be.eq.BN(toBN(balanceRecieverBefore).add(toBN(value)).sub(feeBN))
 
 
-      logs[0].event.should.be.equal('Withdrawal')
+      logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
       logs[0].args.relayer.should.be.eq.BN(operator)
       logs[0].args.fee.should.be.eq.BN(feeBN)
@@ -265,7 +263,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
       const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
       const { proof, publicSignals } = websnarkUtils.toSolidityInput(proofData)
@@ -291,7 +289,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
       const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
       const { proof, publicSignals } = websnarkUtils.toSolidityInput(proofData)
@@ -317,7 +315,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
       const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
@@ -343,7 +341,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
       const dummyRoot = randomHex(32)
@@ -372,7 +370,7 @@ contract('ETHMixer', accounts => {
         refund,
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
       const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
       let { proof, publicSignals } = websnarkUtils.toSolidityInput(proofData)
@@ -424,7 +422,7 @@ contract('ETHMixer', accounts => {
         refund: bigInt(1),
         secret: deposit.secret,
         pathElements: path_elements,
-        pathIndex: path_index,
+        pathIndices: path_index,
       })
 
       const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
@@ -486,26 +484,26 @@ contract('ETHMixer', accounts => {
       let operator = await mixer.operator()
       operator.should.be.equal(sender)
 
-      let isVerifierUpdateDisabled = await mixer.isVerifierUpdateDisabled()
-      isVerifierUpdateDisabled.should.be.equal(false)
+      let isVerifierUpdateAllowed = await mixer.isVerifierUpdateAllowed()
+      isVerifierUpdateAllowed.should.be.equal(true)
 
       await mixer.disableVerifierUpdate().should.be.fulfilled
 
-      const newValue = await mixer.isVerifierUpdateDisabled()
-      newValue.should.be.equal(true)
+      const newValue = await mixer.isVerifierUpdateAllowed()
+      newValue.should.be.equal(false)
     })
 
     it('cannot update verifier after this function is called', async () => {
       let operator = await mixer.operator()
       operator.should.be.equal(sender)
 
-      let isVerifierUpdateDisabled = await mixer.isVerifierUpdateDisabled()
-      isVerifierUpdateDisabled.should.be.equal(false)
+      let isVerifierUpdateAllowed = await mixer.isVerifierUpdateAllowed()
+      isVerifierUpdateAllowed.should.be.equal(true)
 
       await mixer.disableVerifierUpdate().should.be.fulfilled
 
-      const newValue = await mixer.isVerifierUpdateDisabled()
-      newValue.should.be.equal(true)
+      const newValue = await mixer.isVerifierUpdateAllowed()
+      newValue.should.be.equal(false)
 
       const newVerifier = accounts[7]
       const error = await mixer.updateVerifier(newVerifier).should.be.rejected
@@ -519,6 +517,7 @@ contract('ETHMixer', accounts => {
     snapshotId = await takeSnapshot()
     tree = new MerkleTree(
       levels,
+      zeroValue,
       null,
       prefix,
     )
