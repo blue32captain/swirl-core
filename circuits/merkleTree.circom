@@ -1,49 +1,72 @@
 include "../node_modules/circomlib/circuits/mimcsponge.circom";
 
-// Computes MiMC([left, right])
-template HashLeftRight() {
+// Computes MiMC(left + right)
+template HashLeftRight(rounds) {
     signal input left;
     signal input right;
+
     signal output hash;
 
-    component hasher = MiMCSponge(2, 220, 1);
+    component hasher = MiMCSponge(2, rounds, 1);
     hasher.ins[0] <== left;
     hasher.ins[1] <== right;
     hasher.k <== 0;
+
     hash <== hasher.outs[0];
 }
 
-// if s == 0 returns [in[0], in[1]]
-// if s == 1 returns [in[1], in[0]]
-template Mux() {
-    signal input in[2];
-    signal input s;
-    signal output out[2];
+// if pathIndex == 0 returns (left = inputElement, right = pathElement)
+// if pathIndex == 1 returns (left = pathElement, right = inputElement)
+template Selector() {
+    signal input inputElement;
+    signal input pathElement;
+    signal input pathIndex;
 
-    out[0] <== (in[1] - in[0])*s + in[0];
-    out[1] <== (in[0] - in[1])*s + in[1];
+    signal output left;
+    signal output right;
+
+    signal leftSelector1;
+    signal leftSelector2;
+    signal rightSelector1;
+    signal rightSelector2;
+
+    pathIndex * (1-pathIndex) === 0
+
+    leftSelector1 <== (1 - pathIndex) * inputElement;
+    leftSelector2 <== (pathIndex) * pathElement;
+    rightSelector1 <== (pathIndex) * inputElement;
+    rightSelector2 <== (1 - pathIndex) * pathElement;
+
+    left <== leftSelector1 + leftSelector2;
+    right <== rightSelector1 + rightSelector2;
 }
 
 // Verifies that merkle proof is correct for given merkle root and a leaf
-// pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
-template MerkleTree(levels) {
+// pathIndex input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
+template MerkleTree(levels, rounds) {
     signal input leaf;
     signal input root;
     signal private input pathElements[levels];
-    signal private input pathIndices[levels];
+    signal private input pathIndex[levels];
 
     component selectors[levels];
     component hashers[levels];
 
     for (var i = 0; i < levels; i++) {
-        selectors[i] = Mux();
-        selectors[i].in[0] <== i == 0 ? leaf : hashers[i - 1].hash;
-        selectors[i].in[1] <== pathElements[i];
-        selectors[i].s <== pathIndices[i];
+        selectors[i] = Selector();
+        hashers[i] = HashLeftRight(rounds);
 
-        hashers[i] = HashLeftRight();
-        hashers[i].left <== selectors[i].out[0];
-        hashers[i].right <== selectors[i].out[1];
+        selectors[i].pathElement <== pathElements[i];
+        selectors[i].pathIndex <== pathIndex[i];
+
+        hashers[i].left <== selectors[i].left;
+        hashers[i].right <== selectors[i].right;
+    }
+
+    selectors[0].inputElement <== leaf;
+
+    for (var i = 1; i < levels; i++) {
+        selectors[i].inputElement <== hashers[i-1].hash;
     }
 
     root === hashers[levels - 1].hash;
