@@ -39,7 +39,7 @@ contract ERC20Mixer is Mixer {
       _safeErc20Transfer(_relayer, _fee);
     }
     if (_refund > 0) {
-      _recipient.call.value(_refund)("");
+      _recipient.transfer(_refund);
     }
   }
 
