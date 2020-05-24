@@ -20,7 +20,6 @@ template DualMux() {
     signal input s;
     signal output out[2];
 
-    s * (1 - s) === 0
     out[0] <== (in[1] - in[0])*s + in[0];
     out[1] <== (in[0] - in[1])*s + in[1];
 }
@@ -30,8 +29,8 @@ template DualMux() {
 template MerkleTree(levels) {
     signal input leaf;
     signal input root;
-    signal private input pathElements[levels];
-    signal private input pathIndices[levels];
+    signal input pathElements[levels];
+    signal input pathIndices[levels];
 
     component selectors[levels];
     component hashers[levels];
