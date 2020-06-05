@@ -23,6 +23,8 @@ const MerkleTree = require('../lib/MerkleTree')
 
 const rbigint = (nbytes) => snarkjs.bigInt.leBuff2int(crypto.randomBytes(nbytes))
 const pedersenHash = (data) => circomlib.babyJub.unpackPoint(circomlib.pedersenHash.hash(data))[0]
+const toFixedHex = (number, length = 32) =>  '0x' + bigInt(number).toString(16).padStart(length * 2, '0')
+const getRandomRecipient = () => rbigint(20)
 
 function generateDeposit() {
   let deposit = {
@@ -43,25 +45,10 @@ function BNArrayToStringArray(array) {
   return arrayToPrint
 }
 
-function getRandomRecipient() {
-  let recipient = rbigint(20)
-  while (toHex(recipient.toString()).length !== 42) {
-    recipient = rbigint(20)
-  }
-  return recipient
-}
-
 function snarkVerify(proof) {
   proof = unstringifyBigInts2(proof)
   const verification_key = unstringifyBigInts2(require('../build/circuits/withdraw_verification_key.json'))
   return snarkjs['groth'].isValid(verification_key, proof, proof.publicSignals)
-}
-
-function toFixedHex(number, length = 32) {
-  let str = bigInt(number).toString(16)
-  while (str.length < length * 2) str = '0' + str
-  str = '0x' + str
-  return str
 }
 
 contract('ETHMixer', accounts => {
@@ -212,7 +199,7 @@ contract('ETHMixer', accounts => {
       const balanceMixerBefore = await web3.eth.getBalance(mixer.address)
       const balanceRelayerBefore = await web3.eth.getBalance(relayer)
       const balanceOperatorBefore = await web3.eth.getBalance(operator)
-      const balanceRecieverBefore = await web3.eth.getBalance(toHex(recipient.toString()))
+      const balanceRecieverBefore = await web3.eth.getBalance(toFixedHex(recipient, 20))
       let isSpent = await mixer.isSpent(toFixedHex(input.nullifierHash))
       isSpent.should.be.equal(false)
 
@@ -232,7 +219,7 @@ contract('ETHMixer', accounts => {
       const balanceMixerAfter = await web3.eth.getBalance(mixer.address)
       const balanceRelayerAfter = await web3.eth.getBalance(relayer)
       const balanceOperatorAfter = await web3.eth.getBalance(operator)
-      const balanceRecieverAfter = await web3.eth.getBalance(toHex(recipient.toString()))
+      const balanceRecieverAfter = await web3.eth.getBalance(toFixedHex(recipient, 20))
       const feeBN = toBN(fee.toString())
       balanceMixerAfter.should.be.eq.BN(toBN(balanceMixerBefore).sub(toBN(value)))
       balanceRelayerAfter.should.be.eq.BN(toBN(balanceRelayerBefore))
@@ -539,56 +526,6 @@ contract('ETHMixer', accounts => {
       const error = await mixer.updateVerifier(newVerifier, { from:  accounts[7] }).should.be.rejected
       error.reason.should.be.equal('Only operator can call this function.')
 
-    })
-  })
-
-  describe('#isSpent', () => {
-    it('should work', async () => {
-      const deposit1 = generateDeposit()
-      const deposit2 = generateDeposit()
-      await tree.insert(deposit1.commitment)
-      await tree.insert(deposit2.commitment)
-      await mixer.deposit(toFixedHex(deposit1.commitment), { value, gasPrice: '0' })
-      await mixer.deposit(toFixedHex(deposit2.commitment), { value, gasPrice: '0' })
-
-      const { root, path_elements, path_index } = await tree.path(1)
-
-      // Circuit input
-      const input = stringifyBigInts({
-        // public
-        root,
-        nullifierHash: pedersenHash(deposit2.nullifier.leInt2Buff(31)),
-        relayer: operator,
-        recipient,
-        fee,
-        refund,
-
-        // private
-        nullifier: deposit2.nullifier,
-        secret: deposit2.secret,
-        pathElements: path_elements,
-        pathIndices: path_index,
-      })
-
-
-      const proofData = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
-      const { proof } = websnarkUtils.toSolidityInput(proofData)
-
-      const args = [
-        toFixedHex(input.root),
-        toFixedHex(input.nullifierHash),
-        toFixedHex(input.recipient, 20),
-        toFixedHex(input.relayer, 20),
-        toFixedHex(input.fee),
-        toFixedHex(input.refund)
-      ]
-
-      await mixer.withdraw(proof, ...args, { from: relayer, gasPrice: '0' })
-
-      const nullifierHash1 = toFixedHex(pedersenHash(deposit1.nullifier.leInt2Buff(31)))
-      const nullifierHash2 = toFixedHex(pedersenHash(deposit2.nullifier.leInt2Buff(31)))
-      const spentArray = await mixer.isSpentArray([nullifierHash1, nullifierHash2])
-      spentArray.should.be.deep.equal([false, true])
     })
   })
 
