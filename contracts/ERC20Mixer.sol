@@ -11,9 +11,9 @@
 
 pragma solidity ^0.5.8;
 
-import "./Tornado.sol";
+import "./Mixer.sol";
 
-contract ERC20Tornado is Tornado {
+contract ERC20Mixer is Mixer {
   address public token;
 
   constructor(
@@ -22,12 +22,12 @@ contract ERC20Tornado is Tornado {
     uint32 _merkleTreeHeight,
     address _operator,
     address _token
-  ) Tornado(_verifier, _denomination, _merkleTreeHeight, _operator) public {
+  ) Mixer(_verifier, _denomination, _merkleTreeHeight, _operator) public {
     token = _token;
   }
 
   function _processDeposit() internal {
-    require(msg.value == 0, "ETH value is supposed to be 0 for ERC20 instance");
+    require(msg.value == 0, "ETH value is supposed to be 0 for ERC20 mixer");
     _safeErc20TransferFrom(msg.sender, address(this), denomination);
   }
 

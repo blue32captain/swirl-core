@@ -18,7 +18,7 @@ contract IVerifier {
   function verifyProof(bytes memory _proof, uint256[6] memory _input) public returns(bool);
 }
 
-contract Tornado is MerkleTreeWithHistory, ReentrancyGuard {
+contract Mixer is MerkleTreeWithHistory, ReentrancyGuard {
   uint256 public denomination;
   mapping(bytes32 => bool) public nullifierHashes;
   // we store all commitments just to prevent accidental deposits with the same commitment
@@ -56,7 +56,7 @@ contract Tornado is MerkleTreeWithHistory, ReentrancyGuard {
   }
 
   /**
-    @dev Deposit funds into the contract. The caller must send (for ETH) or approve (for ERC20) value equal to or `denomination` of this instance.
+    @dev Deposit funds into mixer. The caller must send (for ETH) or approve (for ERC20) value equal to or `denomination` of this mixer.
     @param _commitment the note commitment, which is PedersenHash(nullifier + secret)
   */
   function deposit(bytes32 _commitment) external payable nonReentrant {
@@ -73,9 +73,9 @@ contract Tornado is MerkleTreeWithHistory, ReentrancyGuard {
   function _processDeposit() internal;
 
   /**
-    @dev Withdraw a deposit from the contract. `proof` is a zkSNARK proof data, and input is an array of circuit public inputs
+    @dev Withdraw a deposit from the mixer. `proof` is a zkSNARK proof data, and input is an array of circuit public inputs
     `input` array consists of:
-      - merkle root of all deposits in the contract
+      - merkle root of all deposits in the mixer
       - hash of unique deposit nullifier to prevent double spends
       - the recipient of funds
       - optional fee that goes to the transaction sender (usually a relay)
