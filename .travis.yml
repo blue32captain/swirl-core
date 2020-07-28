@@ -11,4 +11,4 @@ install:
 script:
   - npm run test
   - npm run eslint
-  - node cli.js test
+  - ./cli.js test
