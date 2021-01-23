@@ -2,7 +2,6 @@ include "../node_modules/circomlib/circuits/bitify.circom";
 include "../node_modules/circomlib/circuits/pedersen.circom";
 include "merkleTree.circom";
 
-// computes Pedersen(nullifier + secret)
 template CommitmentHasher() {
     signal input nullifier;
     signal private input secret;
@@ -22,7 +21,6 @@ template CommitmentHasher() {
     hash <== commitment.out[0];
 }
 
-// Verifies that commitment that corresponds to given secret and nullifier is included in the merkle tree of deposits
 template Withdraw(levels, rounds) {
     signal input root;
     signal input nullifier;
@@ -38,11 +36,10 @@ template Withdraw(levels, rounds) {
 
     component tree = MerkleTree(levels, rounds);
     tree.leaf <== hasher.hash;
-    tree.root <== root;
-    for (var i = 0; i < levels; i++) {
-        tree.pathElements[i] <== pathElements[i];
-        tree.pathIndex[i] <== pathIndex[i];
-    }
+    tree.pathElements <== pathElements;
+    tree.pathIndex <== pathIndex;
+
+    root === tree.root;
 
     // TODO: Check if we need some kind of explicit constraints or something
     fee === fee;
