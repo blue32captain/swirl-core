@@ -21,7 +21,7 @@ const pedersenHash = (data) => circomlib.babyJub.unpackPoint(circomlib.pedersenH
 
 function createDeposit(nullifier, secret) {
   let deposit = { nullifier, secret }
-  deposit.preimage = Buffer.concat([deposit.nullifier.leInt2Buff(32), deposit.secret.leInt2Buff(32)])
+  deposit.preimage = Buffer.concat([deposit.nullifier.leInt2Buff(31), deposit.secret.leInt2Buff(31)])
   deposit.commitment = pedersenHash(deposit.preimage)
   return deposit
 }
@@ -61,7 +61,7 @@ async function withdraw(note, receiver) {
     })
   const tree = new merkleTree(MERKLE_TREE_HEIGHT, EMPTY_ELEMENT, leaves)
   const validRoot = await mixer.methods.isKnownRoot(await tree.root()).call()
-  const nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(32))
+  const nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(31))
   const nullifierHashToCheck = nullifierHash.toString(16).padStart('66', '0x000000')
   const isSpent = await mixer.methods.isSpent(nullifierHashToCheck).call()
   assert(validRoot === true)
@@ -176,6 +176,18 @@ if (inBrowser) {
     case 'withdraw':
       if (args.length === 3 && /^0x[0-9a-fA-F]{128}$/.test(args[1]) && /^0x[0-9a-fA-F]{40}$/.test(args[2])) {
         init().then(() => withdraw(args[1], args[2])).then(() => process.exit(0)).catch(err => {console.log(err); process.exit(1)})
+      }
+      else
+        printHelp(1)
+      break
+    case 'auto':
+      if (args.length === 1) {
+        (async () => {
+          await init()
+          const note = await deposit()
+          await withdraw(note, (await web3.eth.getAccounts())[0])
+          process.exit(0)
+        })()
       }
       else
         printHelp(1)
