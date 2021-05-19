@@ -29,7 +29,7 @@ function generateDeposit() {
     secret: rbigint(31),
     nullifier: rbigint(31),
   }
-  const preimage = Buffer.concat([deposit.nullifier.leInt2Buff(32), deposit.secret.leInt2Buff(32)])
+  const preimage = Buffer.concat([deposit.nullifier.leInt2Buff(31), deposit.secret.leInt2Buff(31)])
   deposit.commitment = pedersenHash(preimage)
   return deposit
 }
@@ -127,7 +127,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -180,7 +180,7 @@ contract('Mixer', accounts => {
       const input = stringifyBigInts({
         // public
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         receiver,
         fee,
 
@@ -198,6 +198,8 @@ contract('Mixer', accounts => {
       const balanceMixerBefore = await web3.eth.getBalance(mixer.address)
       const balanceRelayerBefore = await web3.eth.getBalance(relayer)
       const balanceRecieverBefore = await web3.eth.getBalance(toHex(receiver.toString()))
+      let isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
+      isSpent.should.be.equal(false)
 
       const { logs } = await mixer.withdraw(pi_a, pi_b, pi_c, publicSignals, { from: relayer, gasPrice: '0' })
 
@@ -209,9 +211,12 @@ contract('Mixer', accounts => {
       balanceRelayerAfter.should.be.eq.BN(toBN(balanceRelayerBefore).add(feeBN))
       balanceRecieverAfter.should.be.eq.BN(toBN(balanceRecieverBefore).add(toBN(value)).sub(feeBN))
 
+
       logs[0].event.should.be.equal('Withdraw')
-      logs[0].args.nullifier.should.be.eq.BN(toBN(input.nullifierHash.toString()))
+      logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
       logs[0].args.fee.should.be.eq.BN(feeBN)
+      isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
+      isSpent.should.be.equal(true)
     })
 
     it('should prevent double spend', async () => {
@@ -223,7 +228,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -231,12 +236,35 @@ contract('Mixer', accounts => {
         pathElements: path_elements,
         pathIndex: path_index,
       })
-
       const proof = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
       const { pi_a, pi_b, pi_c, publicSignals } = websnarkUtils.toSolidityInput(proof)
       await mixer.withdraw(pi_a, pi_b, pi_c, publicSignals, { from: relayer }).should.be.fulfilled
       const error = await mixer.withdraw(pi_a, pi_b, pi_c, publicSignals, { from: relayer }).should.be.rejected
       error.reason.should.be.equal('The note has been already spent')
+    })
+
+    it('should prevent double spend with overflow', async () => {
+      const deposit = generateDeposit()
+      await tree.insert(deposit.commitment)
+      await mixer.deposit(toBN(deposit.commitment.toString()), { value, from: sender })
+
+      const { root, path_elements, path_index } = await tree.path(0)
+
+      const input = stringifyBigInts({
+        root,
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifier: deposit.nullifier,
+        receiver,
+        fee,
+        secret: deposit.secret,
+        pathElements: path_elements,
+        pathIndex: path_index,
+      })
+      const proof = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
+      const { pi_a, pi_b, pi_c, publicSignals } = websnarkUtils.toSolidityInput(proof)
+      publicSignals[1] ='0x' + toBN(publicSignals[1]).add(toBN('21888242871839275222246405745257275088548364400416034343698204186575808495617')).toString('hex')
+      const error = await mixer.withdraw(pi_a, pi_b, pi_c, publicSignals, { from: relayer }).should.be.rejected
+      error.reason.should.be.equal('verifier-gte-snark-scalar-field')
     })
 
     it('fee should be less or equal transfer value', async () => {
@@ -248,7 +276,7 @@ contract('Mixer', accounts => {
       const oneEtherFee = bigInt(1e18) // 1 ether
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         nullifier: deposit.nullifier,
         receiver,
         fee: oneEtherFee,
@@ -271,7 +299,7 @@ contract('Mixer', accounts => {
       const { root, path_elements, path_index } = await tree.path(0)
 
       const input = stringifyBigInts({
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         root,
         nullifier: deposit.nullifier,
         receiver,
@@ -299,7 +327,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -307,7 +335,6 @@ contract('Mixer', accounts => {
         pathElements: path_elements,
         pathIndex: path_index,
       })
-
       const proof = await websnarkUtils.genWitnessAndProve(groth16, input, circuit, proving_key)
       let { pi_a, pi_b, pi_c, publicSignals } = websnarkUtils.toSolidityInput(proof)
       const originalPublicSignals = publicSignals.slice()
