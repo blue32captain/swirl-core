@@ -29,7 +29,7 @@ function generateDeposit() {
     secret: rbigint(31),
     nullifier: rbigint(31),
   }
-  const preimage = Buffer.concat([deposit.nullifier.leInt2Buff(31), deposit.secret.leInt2Buff(31)])
+  const preimage = Buffer.concat([deposit.nullifier.leInt2Buff(32), deposit.secret.leInt2Buff(32)])
   deposit.commitment = pedersenHash(preimage)
   return deposit
 }
@@ -62,11 +62,11 @@ contract('Mixer', accounts => {
   const sender = accounts[0]
   const levels = MERKLE_TREE_HEIGHT || 16
   const zeroValue = EMPTY_ELEMENT || 1337
-  const value = AMOUNT || '1000000000000000000'
+  const value = AMOUNT || '1000000000000000000' // 1 ether
   let snapshotId
   let prefix = 'test'
   let tree
-  const fee = bigInt(1e17)
+  const fee = bigInt(AMOUNT).shr(1) || bigInt(1e17)
   const receiver = getRandomReceiver()
   const relayer = accounts[1]
   let groth16
@@ -111,6 +111,17 @@ contract('Mixer', accounts => {
       logs[0].args.leafIndex.should.be.eq.BN(toBN(1))
     })
 
+    it('should not deposit if disabled', async () => {
+      let commitment = 42;
+      (await mixer.isDepositsEnabled()).should.be.equal(true)
+      const err = await mixer.toggleDeposits({ from: accounts[1] }).should.be.rejected
+      err.reason.should.be.equal('unauthorized')
+      await mixer.toggleDeposits({ from: sender });
+      (await mixer.isDepositsEnabled()).should.be.equal(false)
+      let error = await mixer.deposit(commitment, { value, from: sender }).should.be.rejected
+      error.reason.should.be.equal('deposits disabled')
+    })
+
     it('should throw if there is a such commitment', async () => {
       const commitment = 42
       await mixer.deposit(commitment, { value, from: sender }).should.be.fulfilled
@@ -127,7 +138,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -169,6 +180,9 @@ contract('Mixer', accounts => {
 
       const balanceUserBefore = await web3.eth.getBalance(user)
 
+      // Uncomment to measure gas usage
+      // let gas = await mixer.deposit.estimateGas(toBN(deposit.commitment.toString()), { value, from: user, gasPrice: '0' })
+      // console.log('deposit gas:', gas)
       await mixer.deposit(toBN(deposit.commitment.toString()), { value, from: user, gasPrice: '0' })
 
       const balanceUserAfter = await web3.eth.getBalance(user)
@@ -180,7 +194,7 @@ contract('Mixer', accounts => {
       const input = stringifyBigInts({
         // public
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         receiver,
         fee,
 
@@ -201,6 +215,9 @@ contract('Mixer', accounts => {
       let isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
       isSpent.should.be.equal(false)
 
+      // Uncomment to measure gas usage
+      // gas = await mixer.withdraw.estimateGas(pi_a, pi_b, pi_c, publicSignals, { from: relayer, gasPrice: '0' })
+      // console.log('withdraw gas:', gas)
       const { logs } = await mixer.withdraw(pi_a, pi_b, pi_c, publicSignals, { from: relayer, gasPrice: '0' })
 
       const balanceMixerAfter = await web3.eth.getBalance(mixer.address)
@@ -228,7 +245,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -252,7 +269,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
@@ -276,7 +293,7 @@ contract('Mixer', accounts => {
       const oneEtherFee = bigInt(1e18) // 1 ether
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         nullifier: deposit.nullifier,
         receiver,
         fee: oneEtherFee,
@@ -299,7 +316,7 @@ contract('Mixer', accounts => {
       const { root, path_elements, path_index } = await tree.path(0)
 
       const input = stringifyBigInts({
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         root,
         nullifier: deposit.nullifier,
         receiver,
@@ -327,7 +344,7 @@ contract('Mixer', accounts => {
 
       const input = stringifyBigInts({
         root,
-        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
+        nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(32)),
         nullifier: deposit.nullifier,
         receiver,
         fee,
