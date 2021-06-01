@@ -12,7 +12,7 @@ const MiMC = artifacts.require('./MiMC.sol')
 const MerkleTree = require('../lib/MerkleTree')
 const MimcHasher = require('../lib/MiMC')
 
-const { ETH_AMOUNT, MERKLE_TREE_HEIGHT, EMPTY_ELEMENT } = process.env
+const { AMOUNT, MERKLE_TREE_HEIGHT, EMPTY_ELEMENT } = process.env
 
 // eslint-disable-next-line no-unused-vars
 function BNArrayToStringArray(array) {
@@ -30,7 +30,7 @@ contract('MerkleTreeWithHistory', accounts => {
   let zeroValue = EMPTY_ELEMENT || 1337
   const sender = accounts[0]
   // eslint-disable-next-line no-unused-vars
-  const value = ETH_AMOUNT || '1000000000000000000'
+  const value = AMOUNT || '1000000000000000000'
   let snapshotId
   let prefix = 'test'
   let tree
