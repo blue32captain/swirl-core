@@ -13,17 +13,12 @@ const buildGroth16 = require('websnark/src/groth16')
 const websnarkUtils = require('websnark/src/utils')
 
 let web3, mixer, circuit, proving_key, groth16
-let MERKLE_TREE_HEIGHT, AMOUNT, EMPTY_ELEMENT
+let MERKLE_TREE_HEIGHT, ETH_AMOUNT, EMPTY_ELEMENT
+const inBrowser = (typeof window !== 'undefined')
 
-/** Generate random number of specified byte length */
 const rbigint = (nbytes) => snarkjs.bigInt.leBuff2int(crypto.randomBytes(nbytes))
-
-/** Compute pedersen hash */
 const pedersenHash = (data) => circomlib.babyJub.unpackPoint(circomlib.pedersenHash.hash(data))[0]
 
-/**
- * Create deposit object from secret and nullifier
- */
 function createDeposit(nullifier, secret) {
   let deposit = { nullifier, secret }
   deposit.preimage = Buffer.concat([deposit.nullifier.leInt2Buff(31), deposit.secret.leInt2Buff(31)])
@@ -31,66 +26,58 @@ function createDeposit(nullifier, secret) {
   return deposit
 }
 
-/**
- * Make a deposit
- * @returns {Promise<string>}
- */
 async function deposit() {
   const deposit = createDeposit(rbigint(31), rbigint(31))
 
   console.log('Submitting deposit transaction')
-  await mixer.methods.deposit('0x' + deposit.commitment.toString(16)).send({ value: AMOUNT, from: (await web3.eth.getAccounts())[0], gas:1e6 })
+  await mixer.methods.deposit('0x' + deposit.commitment.toString(16)).send({ value: ETH_AMOUNT, from: (await web3.eth.getAccounts())[0], gas:1e6 })
 
   const note = '0x' + deposit.preimage.toString('hex')
   console.log('Your note:', note)
   return note
 }
 
-/**
- * Make a withdrawal
- * @param note A preimage containing secret and nullifier
- * @param receiver Address for receiving funds
- * @returns {Promise<void>}
- */
+async function getBalance(receiver) {
+  const balance = await web3.eth.getBalance(receiver)
+  console.log('Balance is ', web3.utils.fromWei(balance))
+}
+
 async function withdraw(note, receiver) {
-  // Decode hex string and restore the deposit object
   let buf = Buffer.from(note.slice(2), 'hex')
   let deposit = createDeposit(bigInt.leBuff2int(buf.slice(0, 31)), bigInt.leBuff2int(buf.slice(31, 62)))
-  const nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(31))
-  const paddedNullifierHash = nullifierHash.toString(16).padStart('66', '0x000000')
-  const paddedCommitment = deposit.commitment.toString(16).padStart('66', '0x000000')
 
-  // Get all deposit events from smart contract and assemble merkle tree from them
   console.log('Getting current state from mixer contract')
   const events = await mixer.getPastEvents('Deposit', { fromBlock: mixer.deployedBlock, toBlock: 'latest' })
+  let leafIndex
+
+  const commitment = deposit.commitment.toString(16).padStart('66', '0x000000')
   const leaves = events
-    .sort((a, b) => a.returnValues.leafIndex.sub(b.returnValues.leafIndex)) // Sort events in chronological order
-    .map(e => e.returnValues.commitment)
+    .sort((a, b) => a.returnValues.leafIndex.sub(b.returnValues.leafIndex))
+    .map(e => {
+      if (e.returnValues.commitment.eq(commitment)) {
+        leafIndex = e.returnValues.leafIndex.toNumber()
+      }
+      return e.returnValues.commitment
+    })
   const tree = new merkleTree(MERKLE_TREE_HEIGHT, EMPTY_ELEMENT, leaves)
+  const validRoot = await mixer.methods.isKnownRoot(await tree.root()).call()
+  const nullifierHash = pedersenHash(deposit.nullifier.leInt2Buff(31))
+  const nullifierHashToCheck = nullifierHash.toString(16).padStart('66', '0x000000')
+  const isSpent = await mixer.methods.isSpent(nullifierHashToCheck).call()
+  assert(validRoot === true)
+  assert(isSpent === false)
 
-  // Find current commitment in the tree
-  let depositEvent = events.find(e => e.returnValues.commitment.eq(paddedCommitment))
-  let leafIndex = depositEvent ? depositEvent.returnValues.leafIndex.toNumber() : -1
-
-  // Validate that our data is correct
-  const isValidRoot = await mixer.methods.isKnownRoot(await tree.root()).call()
-  const isSpent = await mixer.methods.isSpent(paddedNullifierHash).call()
-  assert(isValidRoot === true) // Merkle tree assembled correctly
-  assert(isSpent === false)    // The note is not spent
-  assert(leafIndex >= 0)       // Our deposit is present in the tree
-
-  // Compute merkle proof of our commitment
+  assert(leafIndex >= 0)
   const { root, path_elements, path_index } = await tree.path(leafIndex)
-
-  // Prepare circuit input
+  // Circuit input
   const input = {
-    // Public snark inputs
+    // public
     root: root,
     nullifierHash,
     receiver: bigInt(receiver),
     fee: bigInt(0),
 
-    // Private snark inputs
+    // private
     nullifier: deposit.nullifier,
     secret: deposit.secret,
     pathElements: path_elements,
@@ -108,40 +95,24 @@ async function withdraw(note, receiver) {
   console.log('Done')
 }
 
-/**
- * Get default wallet balance
- */
-async function getBalance(receiver) {
-  const balance = await web3.eth.getBalance(receiver)
-  console.log('Balance is ', web3.utils.fromWei(balance))
-}
-
-const inBrowser = (typeof window !== 'undefined')
-
-/**
- * Init web3, contracts, and snark
- */
 async function init() {
   let contractJson
   if (inBrowser) {
-    // Initialize using injected web3 (Metamask)
-    // To assemble web version run `npm run browserify`
     web3 = new Web3(window.web3.currentProvider, null, { transactionConfirmationBlocks: 1 })
-    contractJson = await (await fetch('build/contracts/Mixer.json')).json()
+    contractJson = await (await fetch('build/contracts/ETHMixer.json')).json()
     circuit = await (await fetch('build/circuits/withdraw.json')).json()
     proving_key = await (await fetch('build/circuits/withdraw_proving_key.bin')).arrayBuffer()
     MERKLE_TREE_HEIGHT = 16
-    AMOUNT = 1e18
-    EMPTY_ELEMENT = 1
+    ETH_AMOUNT = 1e18
+    EMPTY_ELEMENT = 0
   } else {
-    // Initialize from local node
     web3 = new Web3('http://localhost:8545', null, { transactionConfirmationBlocks: 1 })
-    contractJson = require('./build/contracts/Mixer.json')
+    contractJson = require('./build/contracts/ETHMixer.json')
     circuit = require('./build/circuits/withdraw.json')
     proving_key = fs.readFileSync('build/circuits/withdraw_proving_key.bin').buffer
     require('dotenv').config()
     MERKLE_TREE_HEIGHT = process.env.MERKLE_TREE_HEIGHT
-    AMOUNT = process.env.AMOUNT
+    ETH_AMOUNT = process.env.ETH_AMOUNT
     EMPTY_ELEMENT = process.env.EMPTY_ELEMENT
   }
   groth16 = await buildGroth16()
