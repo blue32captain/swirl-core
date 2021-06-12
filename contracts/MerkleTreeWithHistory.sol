@@ -58,7 +58,7 @@ contract MerkleTreeWithHistory {
 
   function _insert(uint256 leaf) internal {
     uint32 current_index = next_index;
-    require(current_index != 2**(levels - 1), "Merkle tree is full. No more leafs can be added");
+    require(current_index != 2**(levels - 1), "Merkle tree is full");
     next_index += 1;
     uint256 current_level_hash = leaf;
     uint256 left;
@@ -133,3 +133,5 @@ contract MerkleTreeWithHistory {
     return _zeros;
   }
 }
+
+

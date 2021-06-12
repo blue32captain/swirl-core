@@ -127,7 +127,6 @@ contract('ERC20Mixer', accounts => {
         // public
         root,
         nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
-        relayer,
         receiver,
         fee,
 
@@ -160,15 +159,14 @@ contract('ERC20Mixer', accounts => {
       const balanceRecieverAfter = await token.balanceOf(toHex(receiver.toString()))
       const ethBalanceRecieverAfter = await web3.eth.getBalance(toHex(receiver.toString()))
       const feeBN = toBN(fee.toString())
-      balanceMixerAfter.should.be.eq.BN(toBN(balanceMixerBefore).sub(toBN(tokenDenomination)))
-      balanceRelayerAfter.should.be.eq.BN(toBN(balanceRelayerBefore).add(feeBN))
+      balanceMixerAfter.should.be.eq.BN(toBN(balanceMixerBefore).sub(toBN(value)))
+      balanceRelayerAfter.should.be.eq.BN(toBN(balanceRelayerBefore))
       ethBalanceOperatorAfter.should.be.eq.BN(toBN(ethBalanceOperatorBefore))
       balanceRecieverAfter.should.be.eq.BN(toBN(balanceRecieverBefore).add(toBN(tokenDenomination).sub(feeBN)))
       ethBalanceRecieverAfter.should.be.eq.BN(toBN(ethBalanceRecieverBefore).add(toBN(value)))
 
       logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
-      logs[0].args.relayer.should.be.eq.BN(relayer)
       logs[0].args.fee.should.be.eq.BN(feeBN)
       isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
       isSpent.should.be.equal(true)
@@ -209,7 +207,6 @@ contract('ERC20Mixer', accounts => {
         // public
         root,
         nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
-        relayer: operator,
         receiver,
         fee,
 
@@ -252,7 +249,6 @@ contract('ERC20Mixer', accounts => {
 
       logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
-      logs[0].args.relayer.should.be.eq.BN(operator)
       logs[0].args.fee.should.be.eq.BN(feeBN)
       isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
       isSpent.should.be.equal(true)
@@ -289,7 +285,6 @@ contract('ERC20Mixer', accounts => {
         // public
         root,
         nullifierHash: pedersenHash(deposit.nullifier.leInt2Buff(31)),
-        relayer: operator,
         receiver,
         fee,
 
@@ -333,7 +328,6 @@ contract('ERC20Mixer', accounts => {
 
       logs[0].event.should.be.equal('Withdraw')
       logs[0].args.nullifierHash.should.be.eq.BN(toBN(input.nullifierHash.toString()))
-      logs[0].args.relayer.should.be.eq.BN(operator)
       logs[0].args.fee.should.be.eq.BN(feeBN)
       isSpent = await mixer.isSpent(input.nullifierHash.toString(16).padStart(66, '0x00000'))
       isSpent.should.be.equal(true)

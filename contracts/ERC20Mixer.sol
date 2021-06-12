@@ -36,12 +36,12 @@ contract ERC20Mixer is Mixer {
     safeErc20TransferFrom(msg.sender, address(this), mixDenomination);
   }
 
-  function _processWithdraw(address payable _receiver, address payable _relayer, uint256 _fee) internal {
+  function _processWithdraw(address payable _receiver, uint256 _fee) internal {
     _receiver.transfer(userEther);
 
     safeErc20Transfer(_receiver, mixDenomination - _fee);
     if (_fee > 0) {
-      safeErc20Transfer(_relayer, _fee);
+      safeErc20Transfer(operator, _fee);
     }
   }
 
@@ -56,8 +56,6 @@ contract ERC20Mixer is Mixer {
         )
     );
     require(success, "not enough allowed tokens");
-
-    // if contract returns some data let's make sure that is `true` according to standard
     if (data.length > 0) {
       assembly {
         success := mload(add(data, 0x20))
@@ -77,8 +75,6 @@ contract ERC20Mixer is Mixer {
         )
     );
     require(success, "not enough tokens");
-
-    // if contract returns some data let's make sure that is `true` according to standard
     if (data.length > 0) {
       assembly {
         success := mload(add(data, 0x20))
