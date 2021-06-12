@@ -180,15 +180,24 @@ contract('MerkleTreeWithHistory', accounts => {
       zeroValue = 1337
       merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels, zeroValue)
 
-      for (let i = 0; i < 2**(levels - 1); i++) {
+      for (let i = 0; i < 2**levels; i++) {
         await merkleTreeWithHistory.insert(i+42).should.be.fulfilled
       }
 
       let error = await merkleTreeWithHistory.insert(1337).should.be.rejected
-      error.reason.should.be.equal('Merkle tree is full')
+      error.reason.should.be.equal('Merkle tree is full. No more leafs can be added')
 
       error = await merkleTreeWithHistory.insert(1).should.be.rejected
-      error.reason.should.be.equal('Merkle tree is full')
+      error.reason.should.be.equal('Merkle tree is full. No more leafs can be added')
+    })
+
+    it.skip('mimc gas', async () => {
+      levels = 6
+      zeroValue = 1337
+      merkleTreeWithHistory = await MerkleTreeWithHistory.new(levels, zeroValue)
+
+      const gas = await merkleTreeWithHistory.hashLeftRight.estimateGas(zeroValue, zeroValue)
+      console.log('gas', gas - 21000)
     })
   })
 
